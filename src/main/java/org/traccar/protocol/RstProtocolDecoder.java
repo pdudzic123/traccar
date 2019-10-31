@@ -18,6 +18,7 @@ package org.traccar.protocol;
 import io.netty.channel.Channel;
 import org.traccar.BaseProtocolDecoder;
 import org.traccar.DeviceSession;
+import org.traccar.NetworkMessage;
 import org.traccar.Protocol;
 import org.traccar.helper.Parser;
 import org.traccar.helper.PatternBuilder;
@@ -35,18 +36,18 @@ public class RstProtocolDecoder extends BaseProtocolDecoder {
 
     private static final Pattern PATTERN = new PatternBuilder()
             .text("RST;")
-            .expression("[AL];")
-            .expression("[^,]+;")                // model
-            .expression(".{5};")                 // firmware
+            .expression("([AL]);")               // archive
+            .expression("([^,]+);")              // model
+            .expression("(.{5});")               // firmware
             .number("(d{9});")                   // serial number
-            .number("d+;")                       // index
-            .number("d+;")                       // type
+            .number("(d+);")                     // index
+            .number("(d+);")                     // type
             .number("(dd)-(dd)-(dddd) ")         // event date
             .number("(dd):(dd):(dd);")           // event time
             .number("(dd)-(dd)-(dddd) ")         // fix date
             .number("(dd):(dd):(dd);")           // fix time
-            .number("(-?d+.d+);")                // longitude
             .number("(-?d+.d+);")                // latitude
+            .number("(-?d+.d+);")                // longitude
             .number("(d+);")                     // speed
             .number("(d+);")                     // course
             .number("(-?d+);")                   // altitude
@@ -78,7 +79,19 @@ public class RstProtocolDecoder extends BaseProtocolDecoder {
             return null;
         }
 
-        DeviceSession deviceSession = getDeviceSession(channel, remoteAddress, parser.next());
+        String archive = parser.next();
+        String model = parser.next();
+        String firmware = parser.next();
+        String serial = parser.next();
+        parser.nextInt(); // index
+        parser.nextInt(); // type
+
+        if (channel != null && archive.equals("A")) {
+            String response = "RST;A;" + model + ";" + firmware + ";" + serial + ";1;6;FIM;";
+            channel.writeAndFlush(new NetworkMessage(response, remoteAddress));
+        }
+
+        DeviceSession deviceSession = getDeviceSession(channel, remoteAddress, serial);
         if (deviceSession == null) {
             return null;
         }
@@ -88,8 +101,8 @@ public class RstProtocolDecoder extends BaseProtocolDecoder {
 
         position.setDeviceTime(parser.nextDateTime(Parser.DateTimeFormat.DMY_HMS));
         position.setFixTime(parser.nextDateTime(Parser.DateTimeFormat.DMY_HMS));
-        position.setLongitude(parser.nextDouble());
         position.setLatitude(parser.nextDouble());
+        position.setLongitude(parser.nextDouble());
         position.setSpeed(UnitsConverter.knotsFromKph(parser.nextInt()));
         position.setCourse(parser.nextInt());
         position.setAltitude(parser.nextInt());
